@@ -110,14 +110,72 @@ jobs:
         env:
           version: ${{ steps.check_freedict_version.outputs.freedict_version }}
         run: |
-          # Same pyglossary commands as before...
+          version="${FREEDICT_VERSION:-${version}}"
+          echo "Processing version: $version"
+          
+          # Ensure directory exists
+          if [[ ! -d "freedict-eng-zho-${version}" ]]; then
+            echo "Warning: Source directory not found, using eng-zho"
+            [[ -d eng-zho ]] && mv eng-zho "freedict-eng-zho-${version}"
+          fi
+          
+          src_dir="freedict-eng-zho-${version}"
+          if [[ ! -f "$src_dir/eng-zho.tei" ]]; then
+            echo "Warning: eng-zho.tei not found in $src_dir"
+            find . -name "*.tei" | head -1 || exit 1
+          fi
+          
+          # tabfile
+          pyglossary "$src_dir/eng-zho.tei" ./_freedict-eng-zho-${version}.txt --read-format=FreeDict --write-format=Tabfile
+          
+          # tabfile-formatted
+          python text_format.py _freedict-eng-zho-${version}.txt _freedict-eng-zho-${version}-formatted.txt || echo "text_format.py failed, continuing..."
+          
+          # stardict
+          pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-stardict --read-format=Tabfile --write-format=Stardict --name=FreeDict-eng-zho || \
+          pyglossary ./_freedict-eng-zho-${version}.txt ./freedict-eng-zho-${version}-stardict --read-format=Tabfile --write-format=Stardict --name=FreeDict-eng-zho
+          
+          # tabfile-formatted-html2ansi
+          python html2ansi.py _freedict-eng-zho-${version}-formatted.txt freedict-eng-zho-${version}-formatted-html2ansi.txt || \
+          cp _freedict-eng-zho-${version}-formatted.txt freedict-eng-zho-${version}-formatted-html2ansi.txt
+          
+          # sdcv
+          pyglossary ./freedict-eng-zho-${version}-formatted-html2ansi.txt ./freedict-eng-zho-${version}-sdcv --read-format=Tabfile --write-format=Stardict --name=FreeDict-eng-zho
+          
+          # dictd
+          pyglossary ./freedict-eng-zho-${version}-formatted-html2ansi.txt ./freedict-eng-zho-${version}-dictd --read-format=Tabfile --write-format=DictOrg --write-options="dictzip=true" --name=FreeDict-eng-zho
+          
+          # yomichan
+          pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-yomichan.zip --read-format=Tabfile --write-format=Yomichan --name=FreeDict-eng-zho
 
       - name: Create zip files
         env:
           version: ${{ steps.check_freedict_version.outputs.freedict_version }}
         run: |
           version="${FREEDICT_VERSION}"
-          # Same zip creation logic...
+          for base in *.ifo; do
+            prefix="${base%.ifo}"
+            if [[ ! -f "$prefix.ifo" ]]; then
+              echo "Skipping $prefix, missing $prefix.ifo"
+              continue
+            fi
+            if [[ ! -f "$prefix.idx" ]]; then
+              echo "Skipping $prefix, missing $prefix.idx"
+              continue
+            fi
+            # Check which dict file exists: .dict.dz or .dict
+            dict_file=""
+            if [[ -f "$prefix.dict.dz" ]]; then
+              dict_file="$prefix.dict.dz"
+            elif [[ -f "$prefix.dict" ]]; then
+              dict_file="$prefix.dict"
+            else
+              echo "Skipping $prefix, missing dict file"
+              continue
+            fi
+            echo "Creating ${prefix}.zip from $prefix.ifo, $dict_file, $prefix.idx"
+            zip -j "${prefix}.zip" "$prefix.ifo" "$dict_file" "$prefix.idx"
+          done
 
       - name: Generate SHA256 checksums for ALL .zip and .txt files
         if: steps.check_freedict_version.outputs.freedict_version != ''
