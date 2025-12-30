@@ -73,7 +73,7 @@ jobs:
           # Check if tag already exists
           if git ls-remote --tags origin "refs/tags/$tag_name" | grep -q "$tag_name"; then
             echo "Tag $tag_name already exists, skipping release creation."
-            echo "upload_url=dummy" >> $GITHUB_OUTPUT
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
             exit 0
           fi
           
@@ -81,8 +81,13 @@ jobs:
           git tag "$tag_name"
           git push origin "$tag_name"
           
-          # Create release using GitHub CLI (pre-installed on ubuntu-latest)
-          gh release create "$tag_name" "$release_name" --generate-notes --target "${{ github.sha }}"
+          # Create release - tag_name for BOTH tag and name, title goes in body
+          gh release create "$tag_name" \
+            --title "$release_name" \
+            --notes "FreeDict eng-zho $version - Auto-generated release" \
+            --target "${{ github.sha }}"
+          
+          echo "tag_exists=false" >> $GITHUB_OUTPUT
 
       - name: Extract FreeDict archive
         if: steps.check_freedict_version.outputs.freedict_version != ''
