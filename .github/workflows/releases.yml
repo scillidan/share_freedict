@@ -278,6 +278,5 @@ jobs:
           tag_name: ${{ github.ref }}
           name: ${{ steps.tag_short.outputs.short }}
           files: |
-            *.sha256
             _*.txt
             freedict-eng-zho-*.zip
