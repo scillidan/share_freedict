@@ -43,20 +43,15 @@ jobs:
           # Method 1: Look for the tar.xz files
           versions=$(echo "$html" | grep -oP 'freedict-eng-zho-\d{4}\.\d{2}\.\d{2}\.src\.tar\.xz' | grep -oP '\d{4}\.\d{2}\.\d{2}' | sort -V | uniq | tail -1)
           
-          # Method 2: If that doesn't work, look for directory links
           if [[ -z "$versions" ]]; then
-            versions=$(echo "$html" | grep -oP '>\d{4}\.\d{2}\.\d{2}/<' | grep -oP '\d{4}\.\d{2}\.\d{2}' | sort -V | uniq | tail -1)
-          fi
-          
-          if [[ -z "$versions" ]]; then
-            echo "No FreeDict version found."
-            echo "Debug: First 200 chars of HTML:"
-            echo "${html:0:200}"
+            echo "No FreeDict version found in tar.xz files."
+            echo "Debug: First 500 chars of HTML:"
+            echo "${html:0:500}"
             exit 1
           fi
           
           echo "Latest FreeDict version: $versions"
-
+          
           # Check last_version.txt for this dict
           last_freedict_file="last_freedict_version.txt"
           if [[ -f $last_freedict_file ]]; then
@@ -67,18 +62,81 @@ jobs:
               exit 0
             fi
           fi
-
+      
+          # Construct the correct URL
+          # The files might be in a subdirectory with the version
+          tar_url="${base_url}${versions}/freedict-eng-zho-${versions}.src.tar.xz"
+          sha_url="${tar_url}.sha512"
+          
+          echo "Downloading from: $tar_url"
+          echo "SHA512 URL: $sha_url"
+          
           # Download files
-          curl -LO "${base_url}freedict-eng-zho-${versions}.src.tar.xz"
-          curl -LO "${base_url}freedict-eng-zho-${versions}.src.tar.xz.sha512"
-
+          curl -LO "$tar_url" || { echo "Failed to download $tar_url"; exit 1; }
+          curl -LO "$sha_url" || { echo "Failed to download $sha_url"; exit 1; }
+          
+          # List downloaded files
+          ls -la *.tar.xz *.sha512 2>/dev/null || true
+      
           # Verify SHA512
-          echo "$(cat freedict-eng-zho-${versions}.src.tar.xz.sha512)  freedict-eng-zho-${versions}.src.tar.xz" | sha512sum --check
-          if [[ $? -ne 0 ]]; then
-            echo "SHA512 verification failed!"
+          sha512_file="freedict-eng-zho-${versions}.src.tar.xz.sha512"
+          tar_file="freedict-eng-zho-${versions}.src.tar.xz"
+          
+          if [[ ! -f "$sha512_file" ]]; then
+            echo "SHA512 file not found: $sha512_file"
             exit 1
           fi
-
+          
+          if [[ ! -f "$tar_file" ]]; then
+            echo "Tar file not found: $tar_file"
+            exit 1
+          fi
+          
+          echo "Verifying SHA512..."
+          cat "$sha512_file"
+          echo "---"
+          
+          # Check the format of the sha512 file
+          if grep -q "^[0-9a-f]\{128\} " "$sha512_file"; then
+            # Standard format: hash filename
+            sha512sum -c "$sha512_file"
+          elif grep -q "^SHA512" "$sha512_file"; then
+            # Alternative format: SHA512(freedict-eng-zho-2024.10.10.src.tar.xz)= hash
+            expected_hash=$(grep -oP '=\s*\K[0-9a-f]{128}' "$sha512_file" | head -1)
+            if [[ -n "$expected_hash" ]]; then
+              actual_hash=$(sha512sum "$tar_file" | cut -d' ' -f1)
+              if [[ "$actual_hash" == "$expected_hash" ]]; then
+                echo "SHA512 verification passed (alternative format)"
+              else
+                echo "SHA512 verification failed!"
+                echo "Expected: $expected_hash"
+                echo "Actual: $actual_hash"
+                exit 1
+              fi
+            else
+              echo "Could not parse SHA512 file"
+              exit 1
+            fi
+          else
+            # Try to extract the hash (might be just the hash without filename)
+            hash=$(cat "$sha512_file" | tr -d '[:space:]')
+            if [[ ${#hash} -eq 128 ]]; then
+              actual_hash=$(sha512sum "$tar_file" | cut -d' ' -f1)
+              if [[ "$actual_hash" == "$hash" ]]; then
+                echo "SHA512 verification passed (hash only)"
+              else
+                echo "SHA512 verification failed!"
+                echo "Expected: $hash"
+                echo "Actual: $actual_hash"
+                exit 1
+              fi
+            else
+              echo "Unknown SHA512 file format"
+              cat "$sha512_file"
+              exit 1
+            fi
+          fi
+      
           echo "$versions" > $last_freedict_file
           echo "FREEDICT_VERSION=$versions" >> $GITHUB_ENV
           echo "freedict_version=$versions" >> $GITHUB_OUTPUT
