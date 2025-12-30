@@ -36,12 +36,25 @@ jobs:
         id: check_freedict_version
         run: |
           base_url="https://download.freedict.org/dictionaries/eng-zho/"
-          # Get directory listing and extract version pattern YYYY.MM.DD
-          versions=$(curl -s "$base_url" | grep -oP 'freedict-eng-zho-\K\d{4}\.\d{2}\.\d{2}' | sort -V | uniq | tail -1)
+          
+          # Try different approaches
+          html=$(curl -s -L -A "GitHub-Actions-CI" "$base_url")
+          
+          # Method 1: Look for the tar.xz files
+          versions=$(echo "$html" | grep -oP 'freedict-eng-zho-\d{4}\.\d{2}\.\d{2}\.src\.tar\.xz' | grep -oP '\d{4}\.\d{2}\.\d{2}' | sort -V | uniq | tail -1)
+          
+          # Method 2: If that doesn't work, look for directory links
+          if [[ -z "$versions" ]]; then
+            versions=$(echo "$html" | grep -oP '>\d{4}\.\d{2}\.\d{2}/<' | grep -oP '\d{4}\.\d{2}\.\d{2}' | sort -V | uniq | tail -1)
+          fi
+          
           if [[ -z "$versions" ]]; then
             echo "No FreeDict version found."
+            echo "Debug: First 200 chars of HTML:"
+            echo "${html:0:200}"
             exit 1
           fi
+          
           echo "Latest FreeDict version: $versions"
 
           # Check last_version.txt for this dict
