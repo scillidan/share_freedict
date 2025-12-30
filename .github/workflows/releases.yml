@@ -1,9 +1,6 @@
 name: Create Releases
 
 on:
-  push:
-    tags:
-      - "*"
   schedule:
     - cron: '0 1 * * 1'
   workflow_dispatch:
@@ -67,6 +64,11 @@ jobs:
           
           echo "Latest FreeDict version found: $versions"
           
+          # Convert version to yyyymmdd format
+          date_version=$(echo "$versions" | tr -d '.')
+          echo "Date version: $date_version"
+          echo "date_version=$date_version" >> $GITHUB_OUTPUT
+          
           # Check last_version.txt for this dict
           last_freedict_file="last_freedict_version.txt"
           if [[ -f $last_freedict_file ]]; then
@@ -74,6 +76,7 @@ jobs:
             if [[ "$versions" == "$last_version" ]]; then
               echo "No new FreeDict version, skipping."
               echo "freedict_version=$versions" >> $GITHUB_OUTPUT
+              echo "should_skip=true" >> $GITHUB_OUTPUT
               exit 0
             fi
           fi
@@ -153,38 +156,57 @@ jobs:
       
           echo "$versions" > $last_freedict_file
           echo "FREEDICT_VERSION=$versions" >> $GITHUB_ENV
+          echo "DATE_VERSION=$date_version" >> $GITHUB_ENV
           echo "freedict_version=$versions" >> $GITHUB_OUTPUT
+          echo "date_version=$date_version" >> $GITHUB_OUTPUT
+
+      - name: Create Git Tag
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.check_freedict_version.outputs.should_skip != 'true'
+        run: |
+          date_version="${{ steps.check_freedict_version.outputs.date_version }}"
+          echo "Creating tag: $date_version"
+          
+          # Configure git
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Create and push tag
+          git tag -a "$date_version" -m "FreeDict eng-zho version ${{ steps.check_freedict_version.outputs.freedict_version }}"
+          git push origin "$date_version"
 
       - name: Extract FreeDict archive
-        if: steps.check_freedict_version.outputs.freedict_version != ''
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.check_freedict_version.outputs.should_skip != 'true'
         env:
           version: ${{ steps.check_freedict_version.outputs.freedict_version }}
         run: |
-          version="${FREEDICT_VERSION}"
+          version="${{ env.FREEDICT_VERSION }}"
           echo "Extracting version: $version"
           7z x "freedict-eng-zho-${version}.src.tar.xz" -o.
           7z x "freedict-eng-zho-${version}.src.tar" -o.
           ls -la
 
       - name: Move dictd files
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.check_freedict_version.outputs.should_skip != 'true'
         env:
           version: ${{ steps.check_freedict_version.outputs.freedict_version }}
         run: |
-          version="${FREEDICT_VERSION:-${{ steps.extract_version.outputs.version }}}"
+          version="${{ env.FREEDICT_VERSION }}"
           if [[ -d "eng-zho" ]]; then
             mv eng-zho "freedict-eng-zho-${version}"
           fi
           ls -la
 
       - name: Install pyglossary
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.check_freedict_version.outputs.should_skip != 'true'
         run: |
           pip install pyglossary lxml beautifulsoup4 python-idzip tqdm
 
       - name: Run pyglossary
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.check_freedict_version.outputs.should_skip != 'true'
         env:
-          version: ${{ steps.extract_version.outputs.version }}
+          version: ${{ steps.check_freedict_version.outputs.freedict_version }}
         run: |
-          version="${FREEDICT_VERSION:-${version}}"
+          version="${{ env.FREEDICT_VERSION }}"
           echo "Processing version: $version"
           
           # Ensure directory exists
@@ -223,6 +245,7 @@ jobs:
           pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-yomichan.zip --read-format=Tabfile --write-format=Yomichan --name=ECDICT
 
       - name: Create zip files
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.check_freedict_version.outputs.should_skip != 'true'
         run: |
           for base in *.ifo; do
             prefix="${base%.ifo}"
@@ -249,34 +272,55 @@ jobs:
           done
 
       - name: Create zip files for Dictd sets
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.check_freedict_version.outputs.should_skip != 'true'
         env:
-          version: ${{ steps.extract_version.outputs.version }}
+          version: ${{ steps.check_freedict_version.outputs.freedict_version }}
         run: |
-          version="${FREEDICT_VERSION:-${version}}"
+          version="${{ env.FREEDICT_VERSION }}"
           if [[ -f "freedict-eng-zho-${version}-dictd.dict.dz" && -f "freedict-eng-zho-${version}-dictd.index" ]]; then
             zip -j "freedict-eng-zho-${version}-dictd.zip" "freedict-eng-zho-${version}-dictd.dict.dz" "freedict-eng-zho-${version}-dictd.index"
           fi
 
-      - name: Generate SHA256 checksums
+      - name: Generate SHA256 checksums file
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.check_freedict_version.outputs.should_skip != 'true'
         run: |
-          for file in ./*.{txt,zip};
-          do
+          # Create a single checksums.txt file
+          echo "SHA256 checksums for FreeDict eng-zho ${{ env.FREEDICT_VERSION }}" > checksums.txt
+          echo "Generated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> checksums.txt
+          echo "" >> checksums.txt
+          
+          # Generate SHA256 for all .txt and .zip files
+          for file in *.txt *.zip; do
             if [ -f "$file" ]; then
-              sha256sum "$file" > "$file.sha256";
-              echo "Generated checksum for $file";
+              # Generate hash
+              sha256=$(sha256sum "$file" | cut -d' ' -f1)
+              
+              # Write to checksums.txt
+              echo "$sha256  $file" >> checksums.txt
+              
+              # Also set as output for the release action
+              echo "${file}_sha256=$sha256" >> $GITHUB_OUTPUT
+              
+              echo "Generated checksum for $file"
             fi
           done
+          
+          # Display the checksums file
+          echo "=== Checksums.txt ==="
+          cat checksums.txt
 
-      - name: Extract short name from github.ref
-        id: tag_short
-        run: echo "short=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
-        if: github.ref_type == 'tag'
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.check_freedict_version.outputs.should_skip != 'true'
+        env:
+          TAG_NAME: ${{ steps.check_freedict_version.outputs.date_version }}
         with:
-          tag_name: ${{ github.ref }}
-          name: ${{ steps.tag_short.outputs.short }}
-          files: |
-            _*.txt
-            freedict-eng-zho-*.zip
+          tag_name: ${{ env.TAG_NAME }}
+          name: FreeDict eng-zho ${{ steps.check_freedict_version.outputs.date_version }}
+          body: |
+            ## FreeDict English-Chinese Dictionary
+            
+            Version: ${{ steps.check_freedict_version.outputs.freedict_version }}
+            Release date: $(date -u +'%Y-%m-%d')
+            
+            ### SHA256 Checksums
