@@ -130,8 +130,8 @@ jobs:
           done
           ls -la *.sha256
 
-      - name: Upload assets to release (zips + txts + their SHA256 files)
-        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.create_release.outputs.upload_url != 'dummy'
+      - name: Upload assets to release
+        if: steps.check_freedict_version.outputs.freedict_version != '' && steps.create_release.outputs.tag_exists != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
