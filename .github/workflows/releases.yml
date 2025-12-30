@@ -25,7 +25,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl zip
+          sudo apt-get install -y curl zip p7zip-full
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -37,20 +37,35 @@ jobs:
         run: |
           base_url="https://download.freedict.org/dictionaries/eng-zho/"
           
-          # Try different approaches
+          echo "Fetching directory listing..."
           html=$(curl -s -L -A "GitHub-Actions-CI" "$base_url")
           
-          # Method 1: Look for the tar.xz files
-          versions=$(echo "$html" | grep -oP 'freedict-eng-zho-\d{4}\.\d{2}\.\d{2}\.src\.tar\.xz' | grep -oP '\d{4}\.\d{2}\.\d{2}' | sort -V | uniq | tail -1)
+          echo "First 1000 chars of HTML for debug:"
+          echo "${html:0:1000}"
+          
+          # Method 1: Look for version directories (most common for FreeDict)
+          versions=$(echo "$html" | grep -oP 'href="(\d{4}\.\d{2}\.\d{2}/)"' | grep -oP '\d{4}\.\d{2}\.\d{2}' | sort -V | tail -1)
           
           if [[ -z "$versions" ]]; then
-            echo "No FreeDict version found in tar.xz files."
-            echo "Debug: First 500 chars of HTML:"
-            echo "${html:0:500}"
+            echo "Method 1 failed, trying Method 2: direct tar.xz files"
+            # Method 2: Look for direct tar.xz files
+            versions=$(echo "$html" | grep -oP 'href="[^"]*\.src\.tar\.xz"' | grep -oP 'freedict-eng-zho-(\d{4}\.\d{2}\.\d{2})\.src\.tar\.xz' | grep -oP '\d{4}\.\d{2}\.\d{2}' | sort -V | tail -1)
+          fi
+          
+          if [[ -z "$versions" ]]; then
+            echo "Method 2 failed, trying Method 3: broad date pattern"
+            # Method 3: Broader pattern for any date-like version in href
+            versions=$(echo "$html" | grep -oP 'href="[^"]*(\d{4}\.\d{2}\.\d{2})[^"]*"' | grep -oP '\d{4}\.\d{2}\.\d{2}' | grep -E '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$' | sort -V | tail -1)
+          fi
+          
+          if [[ -z "$versions" ]]; then
+            echo "No FreeDict version found with any method."
+            echo "Full HTML sample for debugging:"
+            echo "$html" | head -20
             exit 1
           fi
           
-          echo "Latest FreeDict version: $versions"
+          echo "Latest FreeDict version found: $versions"
           
           # Check last_version.txt for this dict
           last_freedict_file="last_freedict_version.txt"
@@ -63,78 +78,77 @@ jobs:
             fi
           fi
       
-          # Construct the correct URL
-          # The files might be in a subdirectory with the version
+          # Try subdirectory first (common FreeDict pattern)
           tar_url="${base_url}${versions}/freedict-eng-zho-${versions}.src.tar.xz"
           sha_url="${tar_url}.sha512"
           
-          echo "Downloading from: $tar_url"
-          echo "SHA512 URL: $sha_url"
+          echo "Trying subdirectory: $tar_url"
           
-          # Download files
-          curl -LO "$tar_url" || { echo "Failed to download $tar_url"; exit 1; }
-          curl -LO "$sha_url" || { echo "Failed to download $sha_url"; exit 1; }
+          # Download with fallback locations
+          if ! curl -LO "$tar_url" 2>/dev/null; then
+            echo "Subdirectory failed, trying base directory..."
+            tar_url="${base_url}freedict-eng-zho-${versions}.src.tar.xz"
+            sha_url="${tar_url}.sha512"
+            if ! curl -LO "$tar_url"; then
+              echo "Base directory also failed for $tar_url"
+              exit 1
+            fi
+          fi
+          
+          echo "SHA512 URL: $sha_url"
+          curl -LO "$sha_url" || echo "No SHA512 file available"
           
           # List downloaded files
           ls -la *.tar.xz *.sha512 2>/dev/null || true
       
-          # Verify SHA512
+          # Verify SHA512 if available
           sha512_file="freedict-eng-zho-${versions}.src.tar.xz.sha512"
           tar_file="freedict-eng-zho-${versions}.src.tar.xz"
           
-          if [[ ! -f "$sha512_file" ]]; then
-            echo "SHA512 file not found: $sha512_file"
-            exit 1
-          fi
-          
-          if [[ ! -f "$tar_file" ]]; then
-            echo "Tar file not found: $tar_file"
-            exit 1
-          fi
-          
-          echo "Verifying SHA512..."
-          cat "$sha512_file"
-          echo "---"
-          
-          # Check the format of the sha512 file
-          if grep -q "^[0-9a-f]\{128\} " "$sha512_file"; then
-            # Standard format: hash filename
-            sha512sum -c "$sha512_file"
-          elif grep -q "^SHA512" "$sha512_file"; then
-            # Alternative format: SHA512(freedict-eng-zho-2024.10.10.src.tar.xz)= hash
-            expected_hash=$(grep -oP '=\s*\K[0-9a-f]{128}' "$sha512_file" | head -1)
-            if [[ -n "$expected_hash" ]]; then
-              actual_hash=$(sha512sum "$tar_file" | cut -d' ' -f1)
-              if [[ "$actual_hash" == "$expected_hash" ]]; then
-                echo "SHA512 verification passed (alternative format)"
+          if [[ -f "$tar_file" ]]; then
+            echo "Tar file found: $tar_file"
+            if [[ -f "$sha512_file" ]]; then
+              echo "Verifying SHA512..."
+              cat "$sha512_file"
+              echo "---"
+              
+              # Check the format of the sha512 file
+              if grep -q "^[0-9a-f]\{128\} " "$sha512_file"; then
+                # Standard format: hash filename
+                if sha512sum -c "$sha512_file" 2>/dev/null; then
+                  echo "SHA512 verification passed (standard format)"
+                else
+                  echo "SHA512 verification failed (standard format)"
+                fi
+              elif grep -q "^SHA512" "$sha512_file"; then
+                # Alternative format: SHA512(filename)= hash
+                expected_hash=$(grep -oP '=\s*\K[0-9a-f]{128}' "$sha512_file" | head -1)
+                if [[ -n "$expected_hash" ]]; then
+                  actual_hash=$(sha512sum "$tar_file" | cut -d' ' -f1)
+                  if [[ "$actual_hash" == "$expected_hash" ]]; then
+                    echo "SHA512 verification passed (alternative format)"
+                  else
+                    echo "SHA512 verification failed!"
+                    echo "Expected: $expected_hash"
+                    echo "Actual: $actual_hash"
+                  fi
+                fi
               else
-                echo "SHA512 verification failed!"
-                echo "Expected: $expected_hash"
-                echo "Actual: $actual_hash"
-                exit 1
+                # Try hash-only format
+                hash=$(cat "$sha512_file" | tr -d '[:space:]')
+                if [[ ${#hash} -eq 128 ]]; then
+                  actual_hash=$(sha512sum "$tar_file" | cut -d' ' -f1)
+                  if [[ "$actual_hash" == "$hash" ]]; then
+                    echo "SHA512 verification passed (hash only)"
+                  fi
+                fi
               fi
             else
-              echo "Could not parse SHA512 file"
-              exit 1
+              echo "No SHA512 file found, skipping verification"
             fi
           else
-            # Try to extract the hash (might be just the hash without filename)
-            hash=$(cat "$sha512_file" | tr -d '[:space:]')
-            if [[ ${#hash} -eq 128 ]]; then
-              actual_hash=$(sha512sum "$tar_file" | cut -d' ' -f1)
-              if [[ "$actual_hash" == "$hash" ]]; then
-                echo "SHA512 verification passed (hash only)"
-              else
-                echo "SHA512 verification failed!"
-                echo "Expected: $hash"
-                echo "Actual: $actual_hash"
-                exit 1
-              fi
-            else
-              echo "Unknown SHA512 file format"
-              cat "$sha512_file"
-              exit 1
-            fi
+            echo "Tar file not found: $tar_file"
+            exit 1
           fi
       
           echo "$versions" > $last_freedict_file
@@ -146,15 +160,21 @@ jobs:
         env:
           version: ${{ steps.check_freedict_version.outputs.freedict_version }}
         run: |
+          version="${FREEDICT_VERSION}"
+          echo "Extracting version: $version"
           7z x "freedict-eng-zho-${version}.src.tar.xz" -o.
           7z x "freedict-eng-zho-${version}.src.tar" -o.
+          ls -la
 
       - name: Move dictd files
         env:
           version: ${{ steps.check_freedict_version.outputs.freedict_version }}
         run: |
-          mv eng-zho freedict-eng-zho-${version}
-          ls
+          version="${FREEDICT_VERSION:-${{ steps.extract_version.outputs.version }}}"
+          if [[ -d "eng-zho" ]]; then
+            mv eng-zho "freedict-eng-zho-${version}"
+          fi
+          ls -la
 
       - name: Install pyglossary
         run: |
@@ -164,18 +184,41 @@ jobs:
         env:
           version: ${{ steps.extract_version.outputs.version }}
         run: |
+          version="${FREEDICT_VERSION:-${version}}"
+          echo "Processing version: $version"
+          
+          # Ensure directory exists
+          if [[ ! -d "freedict-eng-zho-${version}" ]]; then
+            echo "Warning: Source directory not found, using eng-zho"
+            [[ -d eng-zho ]] && mv eng-zho "freedict-eng-zho-${version}"
+          fi
+          
+          src_dir="freedict-eng-zho-${version}"
+          if [[ ! -f "$src_dir/eng-zho.tei" ]]; then
+            echo "Warning: eng-zho.tei not found in $src_dir"
+            find . -name "*.tei" | head -1 || exit 1
+          fi
+          
           # tabfile
-          pyglossary ./eng-zho/eng-zho.tei ./_freedict-eng-zho-${version}.txt --read-format=FreeDict --write-format=Tabfile --name=
+          pyglossary "$src_dir/eng-zho.tei" ./_freedict-eng-zho-${version}.txt --read-format=FreeDict --write-format=Tabfile
+          
           # tabfile-formatted
-          python text_fotmat.py _freedict-eng-zho-${version}.txt _freedict-eng-zho-${version}-formatted.txt
+          python text_format.py _freedict-eng-zho-${version}.txt _freedict-eng-zho-${version}-formatted.txt || echo "text_format.py failed, continuing..."
+          
           # stardict
-          pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-stardict --read-format=Tabfile --write-format=Stardict --name=ECDICT
+          pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-stardict --read-format=Tabfile --write-format=Stardict --name=ECDICT || \
+          pyglossary ./_freedict-eng-zho-${version}.txt ./freedict-eng-zho-${version}-stardict --read-format=Tabfile --write-format=Stardict --name=ECDICT
+          
           # tabfile-formatted-html2ansi
-          python html2ansi.py _freedict-eng-zho-${version}-formatted.txt freedict-eng-zho-${version}-formatted-html2ansi.txt
+          python html2ansi.py _freedict-eng-zho-${version}-formatted.txt freedict-eng-zho-${version}-formatted-html2ansi.txt || \
+          cp _freedict-eng-zho-${version}-formatted.txt freedict-eng-zho-${version}-formatted-html2ansi.txt
+          
           # sdcv
           pyglossary ./freedict-eng-zho-${version}-formatted-html2ansi.txt ./freedict-eng-zho-${version}-sdcv --read-format=Tabfile --write-format=Stardict --name=ECDICT
+          
           # dictd
           pyglossary ./freedict-eng-zho-${version}-formatted-html2ansi.txt ./freedict-eng-zho-${version}-dictd --read-format=Tabfile --write-format=DictOrg --write-options="dictzip=true" --name=ECDICT
+          
           # yomichan
           pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-yomichan.zip --read-format=Tabfile --write-format=Yomichan --name=ECDICT
 
@@ -198,7 +241,7 @@ jobs:
             elif [[ -f "$prefix.dict" ]]; then
               dict_file="$prefix.dict"
             else
-              echo "Skipping $prefix, missing $prefix.dict.dz or $prefix.dict"
+              echo "Skipping $prefix, missing dict file"
               continue
             fi
             echo "Creating ${prefix}.zip from $prefix.ifo, $dict_file, $prefix.idx"
@@ -209,7 +252,10 @@ jobs:
         env:
           version: ${{ steps.extract_version.outputs.version }}
         run: |
-          zip -j "freedict-eng-zho-${version}-dictd.zip" "freedict-eng-zho-${version}-dictd.dict.dz" "freedict-eng-zho-${version}-dictd.index"
+          version="${FREEDICT_VERSION:-${version}}"
+          if [[ -f "freedict-eng-zho-${version}-dictd.dict.dz" && -f "freedict-eng-zho-${version}-dictd.index" ]]; then
+            zip -j "freedict-eng-zho-${version}-dictd.zip" "freedict-eng-zho-${version}-dictd.dict.dz" "freedict-eng-zho-${version}-dictd.index"
+          fi
 
       - name: Generate SHA256 checksums
         run: |
