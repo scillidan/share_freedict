@@ -25,7 +25,7 @@ def match_replace(text):
     text = re.sub(r'<font class="grammar" color="green">', '<font color="green">', text, flags=re.IGNORECASE)
     text = re.sub(r'^\s*<br>\s*<font color="green">', '<font color="green">', text, flags=re.IGNORECASE)
     # Make <ol><li></li></ol> compact
-    text = text.replace('<ol>', '<ol style="padding-left: 0; margin: 0;">')
+    text = text.replace('<ol>', '<ol style="padding-left: 0; margin: 0;list-style: none;">')
     text = text.replace('<li>', '<li style="margin: 0; padding: 0;">')
     text = re.sub(r'</ol>\s*<br>', '</ol>', text, flags=re.IGNORECASE)
     text = re.sub(r'<li\s+style\s*=\s*["\']margin:\s*0;\s*padding:\s*0;["\']>\s*(<br>\s*)+', 
