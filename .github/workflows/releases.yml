@@ -114,7 +114,7 @@ jobs:
           pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-yomichan.zip --read-format=Tabfile --write-format=Yomichan --name=FreeDict-eng-zho
 
           # aard2
-          pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-aard2 --read-format=Tabfile --write-format=Aard2Slob --name=FreeDict-eng-zho
+          pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-aard2.slob --read-format=Tabfile --write-format=Aard2Slob --name=FreeDict-eng-zho
 
       - name: Create ZIP files of Stardict
         if: steps.check_freedict_version.outputs.should_continue == 'true'
