@@ -155,7 +155,7 @@ jobs:
       - name: Generate SHA256 checksums
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          for file in ./_*.txt ./freedict-eng-zho-*.zip; do
+          for file in ./_*.txt ./*.zip ./*.slob; do
             if [[ -f "$file" ]]; then
               sha256sum "$file" > "$file.sha256"
               echo "Generated SHA256 for $file"
@@ -172,3 +172,4 @@ jobs:
           files: |
             _*.txt
             freedict-eng-zho-*.zip
+            *.slob
