@@ -174,4 +174,3 @@ jobs:
             _*.txt
             freedict-eng-zho-*.zip
             *.slob
-            *.sha256
