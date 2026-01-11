@@ -34,46 +34,48 @@ jobs:
           fi
           echo "Latest FreeDict version found: $version"
 
-          # Convert YYYY.MM.DD to yyyymmdd format for tag/release name
-          tag_name=$(echo "$version" | sed 's/\.//g')
+          # Convert YYYY.MM.DD to yyyymmdd format
+          yyyymmdd=$(echo "$version" | sed 's/\.//g')
+
+          echo "Using version: $yyyymmdd"
+          echo "TAG_NAME=$yyyymmdd" >> $GITHUB_OUTPUT
+          echo "RELEASE_NAME=$yyyymmdd" >> $GITHUB_OUTPUT
+          echo "FILE_VERSION=$yyyymmdd" >> $GITHUB_OUTPUT
 
           # Check last_version.txt
           last_freedict_file="last_freedict_version.txt"
           if [[ -f $last_freedict_file ]]; then
             last_version=$(cat $last_freedict_file)
-            if [[ "$version" == "$last_version" ]]; then
+            if [[ "$yyyymmdd" == "$last_version" ]]; then
               echo "No new FreeDict version, skipping."
-              echo "freedict_version=" >> $GITHUB_OUTPUT
               echo "should_continue=false" >> $GITHUB_OUTPUT
               exit 0
             fi
           fi
 
-          # Download source (same logic as before)
+          # Download source
           tar_url="${base_url}${version}/freedict-eng-zho-${version}.src.tar.xz"
           if ! curl -LO "$tar_url" 2>/dev/null; then
             tar_url="${base_url}freedict-eng-zho-${version}.src.tar.xz"
             curl -LO "$tar_url" || exit 1
           fi
 
-          echo "$version" > $last_freedict_file
-          echo "FREEDICT_VERSION=$version" >> $GITHUB_ENV
-          echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
-          echo "RELEASE_NAME=$tag_name" >> $GITHUB_OUTPUT
-          echo "freedict_version=$version" >> $GITHUB_OUTPUT
+          echo "$yyyymmdd" > $last_freedict_file
           echo "should_continue=true" >> $GITHUB_OUTPUT
 
       - name: (FreeDict eng-zho) Extract FreeDict archive
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          version="${{ steps.check_freedict_version.outputs.freedict_version }}"
-          7z x "freedict-eng-zho-${version}.src.tar.xz" -o.
-          7z x "freedict-eng-zho-${version}.src.tar" -o.
+          version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
+
+          original_version=$(echo "$version" | sed -E 's/(.{4})(.{2})(.{2})/\1.\2.\3/')
+          7z x "freedict-eng-zho-${original_version}.src.tar.xz" -o.
+          7z x "freedict-eng-zho-${original_version}.src.tar" -o.
 
       - name: (FreeDict eng-zho) Rename FreeDict archive
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          version="${{ steps.check_freedict_version.outputs.freedict_version }}"
+          version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
           [[ -d eng-zho ]] && mv eng-zho "freedict-eng-zho-${version}"
 
       - name: Set up Python
@@ -89,7 +91,7 @@ jobs:
       - name: Convert with pyglossary and python scripts
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          version="${{ steps.check_freedict_version.outputs.freedict_version }}"
+          version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
           src_dir="freedict-eng-zho-${version}"
 
           # tabfile
@@ -119,9 +121,8 @@ jobs:
       - name: Create ZIP files of Stardict
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          version="${{ steps.check_freedict_version.outputs.freedict_version }}"
-          for base in *.ifo; do
-            prefix="${base%.ifo}"
+          version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
+          for prefix in freedict-eng-zho-${version}-stardict freedict-eng-zho-${version}-sdcv; do
             if [[ ! -f "$prefix.ifo" ]]; then
               echo "Skipping $prefix, missing $prefix.ifo"
               continue
@@ -147,7 +148,7 @@ jobs:
       - name: Create ZIP files of dictd
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          version="${{ steps.check_freedict_version.outputs.freedict_version }}"
+          version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
           zip -j "freedict-eng-zho-${version}-dictd.zip" \
             "freedict-eng-zho-${version}-dictd.dict.dz" \
             "freedict-eng-zho-${version}-dictd.index"
@@ -173,3 +174,4 @@ jobs:
             _*.txt
             freedict-eng-zho-*.zip
             *.slob
+            *.sha256
