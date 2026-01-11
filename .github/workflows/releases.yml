@@ -21,7 +21,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y p7zip-full zip
 
-      - name: (FreeDict) Check latest eng-zho source version
+      - name: (FreeDict eng-zho) Check latest eng-zho source version
         id: check_freedict_version
         run: |
           base_url="https://download.freedict.org/dictionaries/eng-zho/"
@@ -35,7 +35,7 @@ jobs:
           echo "Latest FreeDict version found: $version"
 
           # Convert YYYY.MM.DD to yyyymmdd format for tag/release name
-          tag_name=$(echo "$version" | sed 's/\./-/g' | sed 's/-//g')  # e.g., 2024.12.31 -> 20241231
+          tag_name=$(echo "$version" | sed 's/\.//g')
 
           # Check last_version.txt
           last_freedict_file="last_freedict_version.txt"
@@ -59,18 +59,18 @@ jobs:
           echo "$version" > $last_freedict_file
           echo "FREEDICT_VERSION=$version" >> $GITHUB_ENV
           echo "TAG_NAME=$tag_name" >> $GITHUB_OUTPUT
-          echo "RELEASE_NAME=$version" >> $GITHUB_OUTPUT
+          echo "RELEASE_NAME=$tag_name" >> $GITHUB_OUTPUT
           echo "freedict_version=$version" >> $GITHUB_OUTPUT
           echo "should_continue=true" >> $GITHUB_OUTPUT
 
-      - name: Extract FreeDict archive
+      - name: (FreeDict eng-zho) Extract FreeDict archive
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
           version="${{ steps.check_freedict_version.outputs.freedict_version }}"
           7z x "freedict-eng-zho-${version}.src.tar.xz" -o.
           7z x "freedict-eng-zho-${version}.src.tar" -o.
 
-      - name: Rename FreeDict archive
+      - name: (FreeDict eng-zho) Rename FreeDict archive
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
           version="${{ steps.check_freedict_version.outputs.freedict_version }}"
@@ -84,7 +84,7 @@ jobs:
 
       - name: Install pyglossary
         if: steps.check_freedict_version.outputs.should_continue == 'true'
-        run: pip install pyglossary lxml beautifulsoup4 python-idzip tqdm
+        run: pip install pyglossary lxml beautifulsoup4 python-idzip tqdm pyicu
 
       - name: Convert with pyglossary and python scripts
         if: steps.check_freedict_version.outputs.should_continue == 'true'
@@ -102,16 +102,19 @@ jobs:
           pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-stardict --read-format=Tabfile --write-format=Stardict --name=FreeDict-eng-zho
 
           # tabfile-formatted-html2ansi
-          python html2ansi.py _freedict-eng-zho-${version}-formatted.txt freedict-eng-zho-${version}-formatted-html2ansi.txt
+          python html2ansi.py _freedict-eng-zho-${version}-formatted.txt _freedict-eng-zho-${version}-formatted-html2ansi.txt
 
           # sdcv
-          pyglossary ./freedict-eng-zho-${version}-formatted-html2ansi.txt ./freedict-eng-zho-${version}-sdcv --read-format=Tabfile --write-format=Stardict --name=FreeDict-eng-zho
+          pyglossary ./_freedict-eng-zho-${version}-formatted-html2ansi.txt ./freedict-eng-zho-${version}-sdcv --read-format=Tabfile --write-format=Stardict --name=FreeDict-eng-zho
 
           # dictd
-          pyglossary ./freedict-eng-zho-${version}-formatted-html2ansi.txt ./freedict-eng-zho-${version}-dictd --read-format=Tabfile --write-format=DictOrg --write-options="dictzip=true" --name=FreeDict-eng-zho
+          pyglossary ./_freedict-eng-zho-${version}-formatted-html2ansi.txt ./freedict-eng-zho-${version}-dictd --read-format=Tabfile --write-format=DictOrg --write-options="dictzip=true" --name=FreeDict-eng-zho
 
           # yomichan
           pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-yomichan.zip --read-format=Tabfile --write-format=Yomichan --name=FreeDict-eng-zho
+
+          # aard2
+          pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-aard2 --read-format=Tabfile --write-format=Aard2Slob --name=FreeDict-eng-zho
 
       - name: Create ZIP files of Stardict
         if: steps.check_freedict_version.outputs.should_continue == 'true'
@@ -165,7 +168,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.check_freedict_version.outputs.TAG_NAME }}
-          name: ${{ steps.check_freedict_version.outputs.freedict_version }}
+          name: ${{ steps.check_freedict_version.outputs.RELEASE_NAME }}
           files: |
             _*.txt
             freedict-eng-zho-*.zip
