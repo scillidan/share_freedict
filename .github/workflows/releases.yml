@@ -67,7 +67,6 @@ jobs:
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
           version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
-
           original_version=$(echo "$version" | sed -E 's/(.{4})(.{2})(.{2})/\1.\2.\3/')
           7z x "freedict-eng-zho-${original_version}.src.tar.xz" -o.
           7z x "freedict-eng-zho-${original_version}.src.tar" -o.
@@ -118,51 +117,29 @@ jobs:
           # aard2
           pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-aard2.slob --read-format=Tabfile --write-format=Aard2Slob --name=FreeDict-eng-zho
 
-      - name: Create ZIP files of Stardict
+      - name: ZIP Stardict
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
-          for prefix in freedict-eng-zho-${version}-stardict freedict-eng-zho-${version}-sdcv; do
-            if [[ ! -f "$prefix.ifo" ]]; then
-              echo "Skipping $prefix, missing $prefix.ifo"
-              continue
-            fi
-            if [[ ! -f "$prefix.idx" ]]; then
-              echo "Skipping $prefix, missing $prefix.idx"
-              continue
-            fi
-            # Check which dict file exists: .dict.dz or .dict
-            dict_file=""
-            if [[ -f "$prefix.dict.dz" ]]; then
-              dict_file="$prefix.dict.dz"
-            elif [[ -f "$prefix.dict" ]]; then
-              dict_file="$prefix.dict"
-            else
-              echo "Skipping $prefix, missing dict file"
-              continue
-            fi
-            echo "Creating ${prefix}.zip from $prefix.ifo, $dict_file, $prefix.idx"
-            zip -j "${prefix}.zip" "$prefix.ifo" "$dict_file" "$prefix.idx"
+          for base in *.ifo; do
+            prefix="${base%.ifo}"
+            zip -j "${prefix}.zip" "$prefix.ifo" "$prefix.dict" "$prefix.idx" 2>/dev/null || true
           done
 
-      - name: Create ZIP files of dictd
+      - name: ZIP dictd
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
           version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
-          zip -j "freedict-eng-zho-${version}-dictd.zip" \
-            "freedict-eng-zho-${version}-dictd.dict.dz" \
-            "freedict-eng-zho-${version}-dictd.index"
+          prefix=freedict-eng-zho
+          zip -j "${prefix}-${version}-dictd.zip" \
+            "${prefix}-${version}-dictd.dict.dz" \
+            "${prefix}-${version}-dictd.index"
 
       - name: Generate SHA256 checksums
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          for file in ./_*.txt ./*.zip ./*.slob; do
-            if [[ -f "$file" ]]; then
-              sha256sum "$file" > "$file.sha256"
-              echo "Generated SHA256 for $file"
-            fi
+          for file in _*.txt *.zip *.slob; do
+            sha256sum "$file" > "$file.sha256"
           done
-          ls -la *.sha256
 
       - name: Create GitHub Release and upload files
         if: steps.check_freedict_version.outputs.should_continue == 'true'
@@ -172,5 +149,5 @@ jobs:
           name: ${{ steps.check_freedict_version.outputs.RELEASE_NAME }}
           files: |
             _*.txt
-            freedict-eng-zho-*.zip
+            *.zip
             *.slob
