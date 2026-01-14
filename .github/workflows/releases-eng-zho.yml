@@ -15,18 +15,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full zip
-
-      - name: (FreeDict eng-zho) Restore cached last_freedict_version.txt
-        id: cache-restore
-        uses: actions/cache/restore@v3
-        with:
-          path: last_freedict_version.txt
-          key: freedict-version-${{ github.ref }}
 
       - name: (FreeDict eng-zho) Check latest eng-zho source version
         id: check_freedict_version
@@ -43,24 +38,19 @@ jobs:
 
           # Convert YYYY.MM.DD to yyyymmdd format
           yyyymmdd=$(echo "$version" | sed 's/\.//g')
-
           echo "Using version: $yyyymmdd"
-          echo "TAG_NAME=$yyyymmdd" >> $GITHUB_OUTPUT
-          echo "RELEASE_NAME=$yyyymmdd" >> $GITHUB_OUTPUT
-          echo "FILE_VERSION=$yyyymmdd" >> $GITHUB_OUTPUT
 
-          # Check last_version.txt
-          last_freedict_file="last_freedict_version.txt"
-          if [[ -f $last_freedict_file ]]; then
-            last_version=$(cat $last_freedict_file)
-            echo "Cached version found: $last_version"
-            if [[ "$yyyymmdd" == "$last_version" ]]; then
-              echo "No new FreeDict version, skipping."
-              echo "should_continue=false" >> $GITHUB_OUTPUT
-              exit 0
-            fi
+          # Check if tag already exists
+          if git rev-parse "refs/tags/$yyyymmdd" >/dev/null 2>&1; then
+            echo "Tag $yyyymmdd already exists. Skipping."
+            echo "should_continue=false" >> $GITHUB_OUTPUT
+            exit 0
           else
-            echo "No cached version found."
+            echo "Tag $yyyymmdd does not exist. Proceeding with release."
+            echo "TAG_NAME=$yyyymmdd" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=$yyyymmdd" >> $GITHUB_OUTPUT
+            echo "FILE_VERSION=$yyyymmdd" >> $GITHUB_OUTPUT
+            echo "should_continue=true" >> $GITHUB_OUTPUT
           fi
 
           # Download source
@@ -69,15 +59,6 @@ jobs:
             tar_url="${base_url}freedict-eng-zho-${version}.src.tar.xz"
             curl -LO "$tar_url" || exit 1
           fi
-
-          echo "$yyyymmdd" > $last_freedict_file
-          echo "should_continue=true" >> $GITHUB_OUTPUT
-
-      - name: (FreeDict eng-zho) Cache last_freedict_version.txt
-        uses: actions/cache/save@v3
-        with:
-          path: last_freedict_version.txt
-          key: freedict-version-${{ github.ref }}
 
       - name: (FreeDict eng-zho) Extract and Rename FreeDict archive
         if: steps.check_freedict_version.outputs.should_continue == 'true'
