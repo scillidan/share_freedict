@@ -1,4 +1,4 @@
-name: Create Releases
+name: Create Releases (eng-zho)
 
 on:
   schedule:
@@ -91,10 +91,9 @@ jobs:
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
           version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
-          src_dir="freedict-eng-zho-${version}"
 
           # tabfile
-          pyglossary "$src_dir/eng-zho.tei" ./_freedict-eng-zho-${version}.txt --read-format=FreeDict --write-format=Tabfile
+          pyglossary "freedict-eng-zho-${version}/eng-zho.tei" ./_freedict-eng-zho-${version}.txt --read-format=FreeDict --write-format=Tabfile
 
           # tabfile-formatted
           python text_format.py _freedict-eng-zho-${version}.txt _freedict-eng-zho-${version}-formatted.txt
@@ -117,27 +116,26 @@ jobs:
           # aard2
           pyglossary ./_freedict-eng-zho-${version}-formatted.txt ./freedict-eng-zho-${version}-aard2.slob --read-format=Tabfile --write-format=Aard2Slob --name=FreeDict-eng-zho
 
-      - name: ZIP Stardict
+      - name: ZIP stardict
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
           for base in *.ifo; do
             prefix="${base%.ifo}"
-            zip -j "${prefix}.zip" "$prefix.ifo" "$prefix.dict" "$prefix.idx" 2>/dev/null || true
+            zip -j "${prefix}.zip" "$prefix".{ifo,dict,idx,syn} 2>/dev/null
           done
 
       - name: ZIP dictd
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          version="${{ steps.check_freedict_version.outputs.FILE_VERSION }}"
-          prefix=freedict-eng-zho
-          zip -j "${prefix}-${version}-dictd.zip" \
-            "${prefix}-${version}-dictd.dict.dz" \
-            "${prefix}-${version}-dictd.index"
+          for base in *.index; do
+            prefix="${base%.index}"
+            zip -j "${prefix}.zip" "$prefix".{dict.dz,index} 2>/dev/null
+          done
 
       - name: Generate SHA256 checksums
         if: steps.check_freedict_version.outputs.should_continue == 'true'
         run: |
-          for file in _*.txt *.zip *.slob; do
+          for file in *.{txt,zip,slob}; do
             sha256sum "$file" > "$file.sha256"
           done
 
@@ -146,8 +144,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.check_freedict_version.outputs.TAG_NAME }}
-          name: ${{ steps.check_freedict_version.outputs.RELEASE_NAME }}
+          name: FreeDict zho-eng ${{ steps.check_freedict_version.outputs.RELEASE_NAME }}
           files: |
-            _*.txt
-            *.zip
-            *.slob
+            *.{txt,zip,slob}
