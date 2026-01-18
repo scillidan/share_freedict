@@ -21,6 +21,7 @@ def match_replace(text):
     text = re.sub(r'(</small>)(?=\s*[^<])', r'\1<br>', text, flags=re.IGNORECASE)
     text = re.sub(r'<br>\s*<small>', '<small>', text, flags=re.IGNORECASE)
     text = re.sub(r'</small>\s*<br>', '</small>', text, flags=re.IGNORECASE)
+    text = re.sub(r'</small>/\s*,\s*/<small>', '</small>/ /<small>', text, flags=re.IGNORECASE)
     # Replace <font class="grammar" color="green"> with <span style="color:green;">
     text = re.sub(r'<font class="grammar" color="green">', '<span style="color:green;">', text, flags=re.IGNORECASE)
     text = re.sub(r'^\s*<br>\s*<font style="color:green;">', '<span style="color:green;">', text, flags=re.IGNORECASE)
