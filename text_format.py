@@ -14,14 +14,22 @@ def match_remove(text):
     return text
 
 def match_replace(text):
-    # Replace /<font color="gray"></font>/ with <small></small>
-    text = re.sub(r'/<font color="gray">', '<small>/', text, flags=re.IGNORECASE)
-    text = re.sub(r'(</font>)(?=\s*[A-Z])', r'\1<br>', text, flags=re.IGNORECASE)
-    text = re.sub(r'</font>/', '/</small>', text, flags=re.IGNORECASE)
-    text = re.sub(r'(</small>)(?=\s*[^<])', r'\1<br>', text, flags=re.IGNORECASE)
-    text = re.sub(r'<br>\s*<small>', '<small>', text, flags=re.IGNORECASE)
-    text = re.sub(r'</small>\s*<br>', '</small>', text, flags=re.IGNORECASE)
-    text = re.sub(r'</small>/\s*,\s*/<small>', '</small>/ /<small>', text, flags=re.IGNORECASE)
+    # Replace /<font color="gray"></font>/... with <small>...</small>
+    def replace_prons(match):
+        content = match.group(0)
+        prons = re.findall(r'/<font\s+color\s*=\s*["\']gray["\']\s*>(.*?)</font>/', 
+                          content, flags=re.IGNORECASE)
+        if not prons:
+            return content
+        formatted_prons = []
+        for pron in prons:
+            if pron.startswith('[') and pron.endswith(']'):
+                formatted_prons.append(pron)
+            else:
+                formatted_prons.append(f'/{pron}/')
+        return f'<small>{" ".join(formatted_prons)}</small>'
+    text = re.sub(r'(?:/<font\s+color\s*=\s*["\']gray["\']\s*>.*?</font>/\s*[,\s]*)+',
+                 replace_prons, text, flags=re.IGNORECASE)
     # Replace <font class="grammar" color="green"> with <span style="color:green;">
     text = re.sub(r'<font class="grammar" color="green">', '<span style="color:green;">', text, flags=re.IGNORECASE)
     text = re.sub(r'^\s*<br>\s*<font style="color:green;">', '<span style="color:green;">', text, flags=re.IGNORECASE)
