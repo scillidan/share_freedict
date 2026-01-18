@@ -15,15 +15,16 @@ def match_remove(text):
 
 def match_replace(text):
     # Replace /<font color="gray"></font>/ with <small></small>
-    text = re.sub(r'/<font color="gray">', '/<small>', text, flags=re.IGNORECASE)
+    text = re.sub(r'/<font color="gray">', '<small>/', text, flags=re.IGNORECASE)
     text = re.sub(r'(</font>)(?=\s*[A-Z])', r'\1<br>', text, flags=re.IGNORECASE)
-    text = re.sub(r'</font>/', '</small>/', text, flags=re.IGNORECASE)
+    text = re.sub(r'</font>/', '/</small>', text, flags=re.IGNORECASE)
     text = re.sub(r'(</small>)(?=\s*[^<])', r'\1<br>', text, flags=re.IGNORECASE)
     text = re.sub(r'<br>\s*<small>', '<small>', text, flags=re.IGNORECASE)
     text = re.sub(r'</small>\s*<br>', '</small>', text, flags=re.IGNORECASE)
     # Replace <font class="grammar" color="green"> with <span style="color:green;">
     text = re.sub(r'<font class="grammar" color="green">', '<span style="color:green;">', text, flags=re.IGNORECASE)
     text = re.sub(r'^\s*<br>\s*<font style="color:green;">', '<span style="color:green;">', text, flags=re.IGNORECASE)
+    text = re.sub(r'</font>', '</span>', text, flags=re.IGNORECASE)
     # Make <ol><li></li></ol> compact
     text = text.replace('<ol>', '<ol style="padding-left: 0; margin: 0;list-style: none;">')
     text = text.replace('<li>', '<li style="margin: 0; padding: 0;">')
