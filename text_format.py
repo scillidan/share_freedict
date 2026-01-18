@@ -15,9 +15,9 @@ def match_remove(text):
 
 def match_replace(text):
     # Replace /<font color="gray"></font>/ with <small></small>
-    text = re.sub(r'/<font color="gray">', '<small>', text, flags=re.IGNORECASE)
+    text = re.sub(r'/<font color="gray">', '/<small>', text, flags=re.IGNORECASE)
     text = re.sub(r'(</font>)(?=\s*[A-Z])', r'\1<br>', text, flags=re.IGNORECASE)
-    text = re.sub(r'</font>/', '</small>', text, flags=re.IGNORECASE)
+    text = re.sub(r'</font>/', '</small>/', text, flags=re.IGNORECASE)
     text = re.sub(r'(</small>)(?=\s*[^<])', r'\1<br>', text, flags=re.IGNORECASE)
     text = re.sub(r'<br>\s*<small>', '<small>', text, flags=re.IGNORECASE)
     text = re.sub(r'</small>\s*<br>', '</small>', text, flags=re.IGNORECASE)
