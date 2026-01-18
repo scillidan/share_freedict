@@ -4,9 +4,10 @@ import sys
 
 def convert(input_file, output_file):
     convert_dict = {
-        '<font color="gray">': "\033[38;5;245m",
-        '<font class="grammar" color="green">': "\033[32m",
-        "</font>": "\033[0m",
+        "<small>": "\033[38;5;245m",
+        "</small>": "\033[0m",
+        '<span style="color:green;">': "\033[32m",
+        "</span>": "\033[0m",
         "<br>": r"\n",
     }
 
