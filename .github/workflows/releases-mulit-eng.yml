@@ -16,7 +16,7 @@ jobs:
       dictionaries: ${{ steps.set-output.outputs.dictionaries }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install dependencies
         run: |
@@ -87,7 +87,7 @@ jobs:
       has_files: ${{ steps.check-output.outputs.has_files }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install system dependencies
         run: |
@@ -348,7 +348,7 @@ jobs:
     if: ${{ !failure() && !cancelled() && needs.process-all-dictionaries.outputs.has_files == 'true' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install system dependencies
         run: |
@@ -381,7 +381,7 @@ jobs:
           zip -j _all-formatted-html2ansi-txt.zip _*-formatted-html2ansi.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.date.outputs.RELEASE_DATE }}
           name: FreeDict multi-eng released ${{ steps.date.outputs.RELEASE_DATE }}
