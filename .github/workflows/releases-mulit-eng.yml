@@ -87,7 +87,7 @@ jobs:
       has_files: ${{ steps.check-output.outputs.has_files }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install system dependencies
         run: |
@@ -348,7 +348,7 @@ jobs:
     if: ${{ !failure() && !cancelled() && needs.process-all-dictionaries.outputs.has_files == 'true' }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install system dependencies
         run: |
