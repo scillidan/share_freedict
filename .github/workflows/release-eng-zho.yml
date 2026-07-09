@@ -140,5 +140,5 @@ jobs:
       run: |
         gh release create "$TAG_NAME" \
           *.txt *.zip *.slob \
-          --title "FreeDict eng-zho released $TAG_NAME" \
+          --title "$TAG_NAME" \
           --generate-notes

@@ -359,5 +359,5 @@ jobs:
       run: |
         gh release create "$RELEASE_DATE" \
           _convert/*.txt _convert/*.zip _convert/*.slob \
-          --title "FreeDict multi-eng released $RELEASE_DATE" \
+          --title "$RELEASE_DATE" \
           --generate-notes
