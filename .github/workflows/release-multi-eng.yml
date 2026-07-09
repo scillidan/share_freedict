@@ -332,8 +332,8 @@ jobs:
       id: date
       run: |
         current_date=$(date -u +"%Y%m%d")
-        echo "RELEASE_DATE=$current_date" >> $GITHUB_OUTPUT
-        echo "Release will be tagged as: $current_date"
+        echo "RELEASE_DATE=multi-eng-$current_date" >> $GITHUB_OUTPUT
+        echo "Release will be tagged as: multi-eng-$current_date"
 
     - name: Download processed dictionaries
       uses: actions/download-artifact@v4

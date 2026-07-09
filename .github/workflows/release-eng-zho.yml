@@ -39,14 +39,14 @@ jobs:
         yyyymmdd=$(echo "$version" | sed 's/\.//g')
         echo "Using version: $yyyymmdd"
 
-        if git rev-parse "refs/tags/$yyyymmdd" >/dev/null 2>&1; then
-          echo "Tag $yyyymmdd already exists. Skipping."
+        if git rev-parse "refs/tags/eng-zho-$yyyymmdd" >/dev/null 2>&1; then
+          echo "Tag eng-zho-$yyyymmdd already exists. Skipping."
           echo "should_continue=false" >> $GITHUB_OUTPUT
           exit 0
         else
-          echo "Tag $yyyymmdd does not exist. Proceeding with release."
-          echo "TAG_NAME=$yyyymmdd" >> $GITHUB_OUTPUT
-          echo "RELEASE_NAME=$yyyymmdd" >> $GITHUB_OUTPUT
+          echo "Tag eng-zho-$yyyymmdd does not exist. Proceeding with release."
+          echo "TAG_NAME=eng-zho-$yyyymmdd" >> $GITHUB_OUTPUT
+          echo "RELEASE_NAME=eng-zho-$yyyymmdd" >> $GITHUB_OUTPUT
           echo "FILE_VERSION=$yyyymmdd" >> $GITHUB_OUTPUT
           echo "should_continue=true" >> $GITHUB_OUTPUT
         fi
@@ -140,5 +140,5 @@ jobs:
       run: |
         gh release create "$TAG_NAME" \
           *.txt *.zip *.slob \
-          --title "$TAG_NAME" \
+          --title "FreeDict eng-zho released $TAG_NAME" \
           --generate-notes
